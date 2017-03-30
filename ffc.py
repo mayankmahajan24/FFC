@@ -11,7 +11,7 @@ from sklearn.model_selection import StratifiedKFold
 from sklearn.linear_model import LassoCV, LassoLarsCV, LassoLarsIC, RandomizedLasso, lasso_stability_path, ElasticNet
 from sklearn.feature_selection import f_regression
 from sklearn.preprocessing import StandardScaler
-from sklearn.metrics import auc, precision_recall_curve
+from sklearn.metrics import auc, precision_recall_curve, mean_squared_error
 from sklearn.ensemble import ExtraTreesRegressor
 from sklearn.utils.extmath import pinvh
 from sklearn.exceptions import ConvergenceWarning
@@ -106,8 +106,6 @@ def feature_selection(X, y):
 
 def gen_submission(pred):
 
-	pred_round = np.round(pred*4)/4 #Round to nearest 0.25
-	pred_round = np.max(np.min(pred_round, 4.0), 1.0) #Bounds
 	pred.to_csv("prediction.csv", index=False)
 	with ZipFile( str('Submission' + datetime.now().strftime('%Y-%m-%d %H:%M:%S') + '.zip'), 'w') as myzip:
 		myzip.write('prediction.csv')
@@ -116,7 +114,7 @@ def gen_submission(pred):
 
 def main():
 	#Impute data.
-	fillMissing('background.csv', 'output.csv')
+	#fillMissing('background.csv', 'output.csv') #Comment this out after one run
 
 	background = pd.read_csv("output.csv", low_memory=False)
 	prediction = pd.read_csv("prediction_old.csv", low_memory=False)
@@ -147,9 +145,16 @@ def main():
 		print fit_lasso.summary()
 		'''
 
+	#Prediction
 	testf = randomized_lasso.transform(background.drop(['challengeID','idnum'],axis=1))
 	grit_predict = olsf.fit().predict(testf)
-	prediction['grit'] = grit_predict
+	grit_predict_round = np.round(grit_predict*4)/4 #Round to nearest 0.25
+	grit_predict_round = np.where(grit_predict_round < 4.0, grit_predict_round, 4.0) #Bounds
+	grit_predict_round = np.where(grit_predict_round > 1.0, grit_predict_round, 1.0) #Bounds
+
+	prediction['grit'] = grit_predict_round
+
+	print "Training MSE (w/rounding): " + str(mean_squared_error(y.as_matrix(), prediction.ix[y.index, 'grit'].as_matrix()))
 
 	gen_submission(prediction)
 
