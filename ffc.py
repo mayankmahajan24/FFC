@@ -106,17 +106,17 @@ def feature_selection(X, y):
 
 def gen_submission(pred):
 
-	pred_round = np.round(pred*4)/4 #Round to nearest 0.5
-	pred_round = np.max(np.min(pred_round, 4.0), 1.0)
+	pred_round = np.round(pred*4)/4 #Round to nearest 0.25
+	pred_round = np.max(np.min(pred_round, 4.0), 1.0) #Bounds
 	pred.to_csv("prediction.csv", index=False)
-	with ZipFile( str('Submission' + datetime.now().strftime('%Y-%m-%d %H:%M:%S') + '.zip', 'w') as myzip:
+	with ZipFile( str('Submission' + datetime.now().strftime('%Y-%m-%d %H:%M:%S') + '.zip'), 'w') as myzip:
 		myzip.write('prediction.csv')
 		myzip.write('narrative.txt')
 		myzip.write('ffc.py')
 
 def main():
 	#Impute data.
-	#fillMissing('background.csv', 'output.csv')
+	fillMissing('background.csv', 'output.csv')
 
 	background = pd.read_csv("output.csv", low_memory=False)
 	prediction = pd.read_csv("prediction_old.csv", low_memory=False)
