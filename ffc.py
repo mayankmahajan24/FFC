@@ -39,27 +39,35 @@ thresholds = np.logspace(-5,-1,5)
 					[M2010 https://arxiv.org/pdf/0809.2932.pdf]
 
 	Classifiers:
+		LineReg
+		LASSO
+		Ridge
+		Elastic
 
 '''
-def mutual_incoherence(X_relevant, X_irelevant):
-	"""Mutual incoherence, as defined by formula (26a) of [Wainwright2006].
-	"""
-	projector = np.dot(np.dot(X_irelevant.T, X_relevant), pinvh(np.dot(X_relevant.T, X_relevant)))
-	return np.max(np.abs(projector).sum(axis=1))
 
+def fillMissing(inputcsv, outputcsv):    
+    # read input csv - takes time
+    df = pd.read_csv(inputcsv, low_memory=False)
+    # Fix date bug
+    df.cf4fint = ((pd.to_datetime(df.cf4fint) - pd.to_datetime('1960-01-01')) / np.timedelta64(1, 'D')).astype(int)
 
+    # replace NA's with median
+    med2 = df.median()
+    dfi = df.fillna(value=med2)
+    
+    #remove object columns
+    dfn= dfi.select_dtypes(['number'])
 
-def plot_ic_criterion(model, name, color):
-	alpha_ = model.alpha_
-	alphas_ = model.alphas_
-	criterion_ = model.criterion_
-	plt.plot(-np.log10(alphas_), criterion_, '--', color=color,
-	         linewidth=3, label='%s criterion' % name)
-	plt.axvline(-np.log10(alpha_), color=color, linewidth=3,
-	            label='alpha: %s estimate' % name)
-	plt.xlabel('-log(alpha)')
-	plt.ylabel('criterion')
+    #remove NA columns
+    a = dfn.notnull().all()
+    dfn = dfn[a[a].index]
 
+    # replace negative values with 1
+    num = dfn._get_numeric_data()
+    num[num < 0] = 1
+    # write filled outputcsv
+    dfn.to_csv(outputcsv, index=False)
 
 def filter_data(background):
 	nRow = len(background) 
@@ -188,8 +196,7 @@ def gen_submission(pred):
 def main2():
 
 	background = pd.read_csv("output.csv", low_memory=False)
-	background.sort(['challengeID'], inplace=True)
-
+	background.sort_values(by='challengeID', inplace=True)
 	prediction = pd.read_csv("prediction_old.csv", low_memory=False)
 	X,y = filter_data(background)
 	results,alphas = gen_grid(X,y,background)
@@ -204,7 +211,7 @@ def main():
 	#fillMissing('background.csv', 'output.csv') #Comment this out after one run
 
 	background = pd.read_csv("output.csv", low_memory=False)
-	background.sort(['challengeID'], inplace=True)
+	background.sort_values(by='challengeID', inplace=True)
 	prediction = pd.read_csv("prediction_old.csv", low_memory=False)
 
 	X,y = filter_data(background)
@@ -220,19 +227,6 @@ def main():
 		print "OLS"
 		print olsf.fit().summary()
 
-		'''Xstd = X.sub(X.mean(1), axis=0).div(X.std(1), axis=0)
-
-		#LASSO on grit
-		ols = lm.OLS(y,Xstd)
-		print "LASSO"
-		fit_lasso = ols.fit_regularized()
-		print fit_lasso.summary()
-
-		print "ElasticNet"
-		fit_elastic = ols.fit_regularized(alpha=1.0, L1_wt=0.5)
-		print fit_lasso.summary()
-		'''
-
 	#Prediction
 	testf = randomized_lasso.transform(background.drop(['challengeID','idnum'],axis=1))
 	grit_predict = olsf.fit().predict(testf)
@@ -246,32 +240,6 @@ def main():
 	print "Training MSE (w/rounding): " + str(mean_squared_error(y.as_matrix(), prediction.ix[y.index, 'grit'].as_matrix()))
 
 	gen_submission(prediction)
-
-	#plt.draw()
-	#plt.pause(0.001)
-
-def fillMissing(inputcsv, outputcsv):    
-    # read input csv - takes time
-    df = pd.read_csv(inputcsv, low_memory=False)
-    # Fix date bug
-    df.cf4fint = ((pd.to_datetime(df.cf4fint) - pd.to_datetime('1960-01-01')) / np.timedelta64(1, 'D')).astype(int)
-
-    # replace NA's with median
-    med2 = df.median()
-    dfi = df.fillna(value=med2)
-    
-    #remove object columns
-    dfn= dfi.select_dtypes(['number'])
-
-    #remove NA columns
-    a = dfn.notnull().all()
-    dfn = dfn[a[a].index]
-
-    # replace negative values with 1
-    num = dfn._get_numeric_data()
-    num[num < 0] = 1
-    # write filled outputcsv
-    dfn.to_csv(outputcsv, index=False)
     
 if __name__ == "__main__":
 	main2()
