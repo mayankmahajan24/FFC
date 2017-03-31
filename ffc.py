@@ -7,7 +7,7 @@ from scipy import linalg
 import statsmodels.regression.linear_model as lm
 from sklearn import datasets
 from sklearn.mixture import GaussianMixture
-from sklearn.model_selection import StratifiedKFold
+from sklearn.model_selection import StratifiedKFold, StratifiedShuffleSplit
 from sklearn.linear_model import LassoCV, LassoLarsCV, LassoLarsIC, RandomizedLasso, lasso_stability_path, ElasticNet, Lasso
 from sklearn.feature_selection import f_regression
 from sklearn.preprocessing import StandardScaler
@@ -81,10 +81,10 @@ def feature_selection(X, y,threshold=0.25):
 	with warnings.catch_warnings():
 		warnings.simplefilter('ignore', UserWarning)
 		warnings.simplefilter('ignore', ConvergenceWarning)
-		print "\tLasso Stability Path"
+		#print "\tLasso Stability Path"
 		#alpha_grid, scores_path = lasso_stability_path(X, y, random_state=43, eps=0.05)
-		print "\tRandomizedLasso"
-		lasso = RandomizedLasso(alpha='aic', random_state=39,threshold=threshold)
+		#print "\tRandomizedLasso"
+		lasso = RandomizedLasso(alpha='aic', random_state=39,selection_threshold=threshold)
 		lasso.fit(X,y)		
 
 	# plt.figure()
@@ -111,7 +111,7 @@ def gen_grid(X,y,background):
 
 	for threshold in thresholds:
 		print threshold
-		randomized_lasso = feature_selection(X,y, threshold)
+		randomized_lasso = feature_selection(X,y, threshold=threshold)
 		Xf = X.loc[:,randomized_lasso.get_support()]
 		testf = randomized_lasso.transform(background.drop(['challengeID','idnum'],axis=1))
 
