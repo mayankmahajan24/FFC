@@ -114,7 +114,6 @@ def gen_grid(X,y,background):
 
 	for threshold in thresholds:
 		print threshold
-		randomized_lasso = feature_selection(X,y)
 		support = np.where(stability_scores > threshold)[0]
 		Xf = X.iloc[:,support]
 		testf = background.drop(['challengeID','idnum'],axis=1).iloc[:,support]
