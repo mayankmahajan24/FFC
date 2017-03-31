@@ -18,6 +18,11 @@ from sklearn.exceptions import ConvergenceWarning
 import warnings
 from zipfile import ZipFile
 from datetime import datetime
+
+supports = None
+results = None
+alphas = None
+thresholds = np.logspace(-5,-1,5)
 '''
 	Filtering
 		remove object columns
@@ -105,16 +110,16 @@ def feature_selection(X, y):
 	return lasso
 
 def gen_grid(X,y,background):
-	thresholds  = np.linspace(0.01,0.25,7)
 	results = pd.DataFrame(index=thresholds, columns=['OLS', 'LASSO', 'Ridge', 'ElasticNet'])
 	alphas = pd.DataFrame(index=thresholds, columns=['LASSO', 'Ridge', 'ElasticNet'])
-
+	supports = {}
 	randomized_lasso = feature_selection(X,y)
 	stability_scores = randomized_lasso.scores_
 
 	for threshold in thresholds:
-		print threshold
 		support = np.where(stability_scores > threshold)[0]
+		print threshold, '\t', str(support)
+		supports[threshold] = support
 		Xf = X.iloc[:,support]
 		testf = background.drop(['challengeID','idnum'],axis=1).iloc[:,support]
 
@@ -128,7 +133,7 @@ def gen_grid(X,y,background):
 			results.ix[threshold,'OLS'] = ols_fit.mse_resid
 			#print "OLS"
 
-			param_grid = dict(alpha=np.logspace(-3,1,5))
+			param_grid = dict(alpha=np.logspace(-6,-2,5))
 			cv = StratifiedKFold(n_splits=5, random_state=42)
 
 			#LASSO
@@ -143,7 +148,7 @@ def gen_grid(X,y,background):
 			ridge_grid = GridSearchCV(Ridge(), param_grid=param_grid, cv=cv, scoring='neg_mean_squared_error')
 			ridge_grid.fit(Xf,y)
 			results.ix[threshold,'Ridge'] = ridge_grid.best_score_
-			results.ix[threshold,'LASSO'] = ridge_grid.best_params_['alpha']
+			alphas.ix[threshold,'Ridge'] = ridge_grid.best_params_['alpha']
 			
 			#Elastic
 			print "\tElasticNet"
@@ -151,7 +156,25 @@ def gen_grid(X,y,background):
 			elastic_grid.fit(Xf,y)
 			results.ix[threshold,'ElasticNet'] = elastic_grid.best_score_
 			alphas.ix[threshold,'ElasticNet'] = elastic_grid.best_params_['alpha']
-	return results.abs(), alphas
+
+	return results.abs, alphas
+
+def make_threshold_plot():
+	plt.figure()
+
+	plt.xscale('log')
+	ols_plot = plt.plot(thresholds, results['OLS'], 'r')
+	lasso_plot = plt.plot(thresholds, results['LASSO'], 'b')
+	ridge_plot = plt.plot(thresholds, results['Ridge'], 'o')
+	elastic_plot = plt.plot(thresholds, results['ElasticNet'], 'g')
+
+	plt.xlabel('Stability score: proportion of times selected')
+	plt.ylabel('Mean squared error on training data')
+	plt.title('Mean squared error as a function of RandomizedLasso threshold')# - Mutual incoherence: %.1f' % mi)
+	plt.axis('tight')
+	plt.legend((ols_plot[0], lasso_plot[0], ridge_plot[0], elastic_plot[0]), ('OLS', 'LASSO', 'Ridge', 'ElasticNet'),
+	           loc='best')
+	plt.show()
 
 
 def gen_submission(pred):
@@ -165,17 +188,23 @@ def gen_submission(pred):
 def main2():
 
 	background = pd.read_csv("output.csv", low_memory=False)
+	background.sort(['challengeID'], inplace=True)
+
 	prediction = pd.read_csv("prediction_old.csv", low_memory=False)
 	X,y = filter_data(background)
 	results,alphas = gen_grid(X,y,background)
 	results.to_csv("scores.csv", index=False)
 	alphas.to_csv("alphas.csv", index=False)
 
+	make_threshold_plot()
+
+
 def main():
 	#Impute data.
 	#fillMissing('background.csv', 'output.csv') #Comment this out after one run
 
 	background = pd.read_csv("output.csv", low_memory=False)
+	background.sort(['challengeID'], inplace=True)
 	prediction = pd.read_csv("prediction_old.csv", low_memory=False)
 
 	X,y = filter_data(background)
