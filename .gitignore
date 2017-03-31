@@ -1,3 +1,5 @@
 background.csv
 output.csv
 sub*.zip
+.*
+.ipynb_checkpoints/*

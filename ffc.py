@@ -77,14 +77,17 @@ def filter_data(background):
 	X_train = X_all.iloc[:2121,:]
 
 	Y_train = pd.read_csv("train.csv", low_memory=False)
-	all_grit = Y_train['grit'] #This is a Series
+	return X_train, Y_train
+
+def get_data_for_characteristic(X_train, Y_train, characteristic):
+	all_char = Y_train[characteristic] #This is a Series
 
 	#Remove rows where grit is NA
-	grit_defined = np.where(all_grit.notnull())
-	grit = all_grit.iloc[grit_defined]
-	X_train_grit = X_train.iloc[grit_defined]
+	char_defined = np.where(all_char.notnull())
+	char = all_char.iloc[char_defined]
+	X_train_char = X_train.iloc[char_defined]
 
-	return X_train_grit, grit
+	return X_train_char, char
 
 def feature_selection(X, y):
 	#alphas = np.logspace(-3,-1,21)
@@ -198,7 +201,8 @@ def main2():
 	background = pd.read_csv("output.csv", low_memory=False)
 	background.sort_values(by='challengeID', inplace=True)
 	prediction = pd.read_csv("prediction_old.csv", low_memory=False)
-	X,y = filter_data(background)
+	X_all,y_all = filter_data(background)
+	X,y = get_data_for_characteristic(X_all, y_all, 'grit')
 	results,alphas = gen_grid(X,y,background)
 	results.to_csv("scores.csv", index=False)
 	alphas.to_csv("alphas.csv", index=False)
@@ -214,7 +218,8 @@ def main():
 	background.sort_values(by='challengeID', inplace=True)
 	prediction = pd.read_csv("prediction_old.csv", low_memory=False)
 
-	X,y = filter_data(background)
+	X_all,y_all = filter_data(background)
+	X,y = get_data_for_characteristic(X_all, y_all, 'grit')
 
 	randomized_lasso = feature_selection(X,y)
 	Xf = X.loc[:,randomized_lasso.get_support()]
