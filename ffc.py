@@ -92,35 +92,36 @@ def get_data_for_characteristic(X_train, Y_train, characteristic):
 	return X_train_char, char
 
 def feature_selection(X, y):
-	#alphas = np.logspace(-3,-1,21)
-	#print "Feature Selection"
+	print "Feature Selection"
 	X = X.as_matrix()
 	y = y.as_matrix()
 	with warnings.catch_warnings():
 		warnings.simplefilter('ignore', UserWarning)
 		warnings.simplefilter('ignore', ConvergenceWarning)
-		#print "\tLasso Stability Path"
-		#alpha_grid, scores_path = lasso_stability_path(X, y, random_state=43, eps=0.05)
-		#print "\tRandomizedLas	so"
 		lasso = RandomizedLasso(alpha='aic', random_state=39, n_resampling=500)
 		lasso.fit(X,y)		
-
-	# plt.figure()
-	# # We plot the path as a function of alpha/alpha_max to the power 1/3: the
-	# # power 1/3 scales the path less brutally than the log, and enables to
-	# # see the progression along the path
-	# #hg = plt.plot(alpha_grid[1:] ** .333, scores_path[coef != 0].T[1:], 'r')
-	# hb = plt.plot(alpha_grid[1:] ** .333, scores_path.T[1:], 'k')
-	# ymin, ymax = plt.ylim()
-	# plt.xlabel(r'$(\alpha / \alpha_{max})^{1/3}$')
-	# plt.ylabel('Stability score: proportion of times selected')
-	# plt.title('Stability Scores Path')# - Mutual incoherence: %.1f' % mi)
-	# plt.axis('tight')
-	# #plt.legend((hg[0], hb[0]), ('relevant features', 'irrelevant features'),
-	# #           loc='best')
-	# plt.show()
+		#plot_stability_path()
 
 	return lasso
+
+def plot_stability_path():
+	plt.figure()
+	# We plot the path as a function of alpha/alpha_max to the power 1/3: the
+	# power 1/3 scales the path less brutally than the log, and enables to
+	# see the progression along the path
+	print "\tLasso Stability Path"
+	alpha_grid, scores_path = lasso_stability_path(X, y, random_state=43, eps=0.05)
+
+	hg = plt.plot(alpha_grid[1:] ** .333, scores_path[coef != 0].T[1:], 'r')
+	hb = plt.plot(alpha_grid[1:] ** .333, scores_path.T[1:], 'k')
+	ymin, ymax = plt.ylim()
+	plt.xlabel(r'$(\alpha / \alpha_{max})^{1/3}$')
+	plt.ylabel('Stability score: proportion of times selected')
+	plt.title('Stability Scores Path')# - Mutual incoherence: %.1f' % mi)
+	plt.axis('tight')
+	plt.legend((hg[0], hb[0]), ('relevant features', 'irrelevant features'),
+	           loc='best')
+	plt.show()
 
 def gen_grid(X,y,background):
 	global results, alphas, thresholds
