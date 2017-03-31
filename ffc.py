@@ -154,6 +154,7 @@ def main():
 
 	prediction['grit'] = grit_predict_round
 
+	print "Training MSE (no rounding): " + str(mean_squared_error(y.as_matrix(), grit_predict.as_matrix()))
 	print "Training MSE (w/rounding): " + str(mean_squared_error(y.as_matrix(), prediction.ix[y.index, 'grit'].as_matrix()))
 
 	gen_submission(prediction)
