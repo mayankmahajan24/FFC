@@ -8,7 +8,7 @@ import statsmodels.regression.linear_model as lm
 from sklearn import datasets
 from sklearn.mixture import GaussianMixture
 from sklearn.model_selection import StratifiedKFold
-from sklearn.linear_model import LassoCV, LassoLarsCV, LassoLarsIC, RandomizedLasso, lasso_stability_path, ElasticNet
+from sklearn.linear_model import LassoCV, LassoLarsCV, LassoLarsIC, RandomizedLasso, lasso_stability_path, ElasticNet, Lasso
 from sklearn.feature_selection import f_regression
 from sklearn.preprocessing import StandardScaler
 from sklearn.metrics import auc, precision_recall_curve, mean_squared_error
@@ -75,7 +75,7 @@ def filter_data(background):
 
 def feature_selection(X, y):
 	#alphas = np.logspace(-3,-1,21)
-	print "Feature Selection"
+	#print "Feature Selection"
 	X = X.as_matrix()
 	y = y.as_matrix()
 	with warnings.catch_warnings():
@@ -103,6 +103,43 @@ def feature_selection(X, y):
 	# plt.show()
 
 	return lasso
+
+
+def gen_grid(X,y,background):
+	thresholds  = np.linspace(0.05,0.35,7)
+	results = pd.DataFrame(index=thresholds, columns=['OLS', 'LASSO', 'Ridge', 'ElasticNet'])
+	for threshold in enumerate(thresholds):
+		randomized_lasso = feature_selection(X,y)
+		Xf = X.loc[:,randomized_lasso.get_support()]
+		testf = randomized_lasso.transform(background.drop(['challengeID','idnum'],axis=1))
+
+		with warnings.catch_warnings():
+			warnings.simplefilter('ignore', UserWarning)
+			warnings.simplefilter('ignore', ConvergenceWarning)
+			#OLS
+			ols_fit = lm.OLS(y, Xf).fit()
+			results.ix[threshold,'OLS'] = ols_fit.mse_resid
+			#print "OLS"
+
+			param_grid = dict(alpha=np.logspace(-3,1,5))
+			cv = StratifiedShuffleSplit(n_splits=5, test_size=0.2, random_state=42)
+
+			#LASSO
+			lasso_grid = GridSearchCV(Lasso(), param_grid=param_grid, cv=cv, scoring='mean_squared_error')
+			lasso_grid.fit(Xf,y)
+			results.ix[threshold,'LASSO'] = lasso_grid.best_score_
+
+			#Ridge
+			ridge_grid = GridSearchCV(Ridge(), param_grid=param_grid, cv=cv, scoring='mean_squared_error')
+			ridge_grid.fit(Xf,y)
+			results.ix[threshold,'Ridge'] = ridge_grid.best_score_
+
+			#Elastic
+			elastic_grid = GridSearchCV(ElasticNet(), param_grid=param_grid, cv=cv, scoring='mean_squared_error')
+			elastic_grid.fit(Xf,y)
+			results.ix[threshold,'ElasticNet'] = elastic_grid.best_score_
+	return results
+
 
 def gen_submission(pred):
 
