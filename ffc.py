@@ -19,10 +19,10 @@ import warnings
 from zipfile import ZipFile
 from datetime import datetime
 
-supports = None
-results = None
-alphas = None
+supports = {}
 thresholds = np.logspace(-5,-1,5)
+results = pd.DataFrame(index=thresholds, columns=['OLS', 'LASSO', 'Ridge', 'ElasticNet'])
+alphas = pd.DataFrame(index=thresholds, columns=['LASSO', 'Ridge', 'ElasticNet'])
 '''
 	Filtering
 		remove object columns
@@ -118,9 +118,8 @@ def feature_selection(X, y):
 	return lasso
 
 def gen_grid(X,y,background):
-	results = pd.DataFrame(index=thresholds, columns=['OLS', 'LASSO', 'Ridge', 'ElasticNet'])
-	alphas = pd.DataFrame(index=thresholds, columns=['LASSO', 'Ridge', 'ElasticNet'])
-	supports = {}
+	global results, alphas, thresholds
+
 	randomized_lasso = feature_selection(X,y)
 	stability_scores = randomized_lasso.scores_
 
@@ -165,7 +164,7 @@ def gen_grid(X,y,background):
 			results.ix[threshold,'ElasticNet'] = elastic_grid.best_score_
 			alphas.ix[threshold,'ElasticNet'] = elastic_grid.best_params_['alpha']
 
-	return results.abs, alphas
+	return results.abs(), alphas
 
 def make_threshold_plot():
 	plt.figure()
@@ -197,12 +196,12 @@ def main2():
 
 	background = pd.read_csv("output.csv", low_memory=False)
 	background.sort_values(by='challengeID', inplace=True)
+	background.index = background['challengeID'] - 1
 	prediction = pd.read_csv("prediction_old.csv", low_memory=False)
 	X,y = filter_data(background)
 	results,alphas = gen_grid(X,y,background)
 	results.to_csv("scores.csv", index=False)
 	alphas.to_csv("alphas.csv", index=False)
-
 	make_threshold_plot()
 
 
@@ -212,6 +211,7 @@ def main():
 
 	background = pd.read_csv("output.csv", low_memory=False)
 	background.sort_values(by='challengeID', inplace=True)
+	background.index = background['challengeID'] - 1
 	prediction = pd.read_csv("prediction_old.csv", low_memory=False)
 
 	X,y = filter_data(background)
