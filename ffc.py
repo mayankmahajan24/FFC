@@ -73,7 +73,7 @@ def filter_data(background):
 
 	return X_train_grit, grit
 
-def feature_selection(X, y):
+def feature_selection(X, y,threshold=0.25):
 	#alphas = np.logspace(-3,-1,21)
 	#print "Feature Selection"
 	X = X.as_matrix()
@@ -84,7 +84,7 @@ def feature_selection(X, y):
 		print "\tLasso Stability Path"
 		#alpha_grid, scores_path = lasso_stability_path(X, y, random_state=43, eps=0.05)
 		print "\tRandomizedLasso"
-		lasso = RandomizedLasso(alpha='aic', random_state=39)
+		lasso = RandomizedLasso(alpha='aic', random_state=39,threshold=threshold)
 		lasso.fit(X,y)		
 
 	# plt.figure()
@@ -104,12 +104,14 @@ def feature_selection(X, y):
 
 	return lasso
 
-
 def gen_grid(X,y,background):
 	thresholds  = np.linspace(0.05,0.35,7)
 	results = pd.DataFrame(index=thresholds, columns=['OLS', 'LASSO', 'Ridge', 'ElasticNet'])
-	for threshold in enumerate(thresholds):
-		randomized_lasso = feature_selection(X,y)
+	alphas = pd.DataFrame(index=thresholds, columns=['LASSO', 'Ridge', 'ElasticNet'])
+
+	for threshold in thresholds:
+		print threshold
+		randomized_lasso = feature_selection(X,y, threshold)
 		Xf = X.loc[:,randomized_lasso.get_support()]
 		testf = randomized_lasso.transform(background.drop(['challengeID','idnum'],axis=1))
 
@@ -117,6 +119,8 @@ def gen_grid(X,y,background):
 			warnings.simplefilter('ignore', UserWarning)
 			warnings.simplefilter('ignore', ConvergenceWarning)
 			#OLS
+
+			print "\tOLS"
 			ols_fit = lm.OLS(y, Xf).fit()
 			results.ix[threshold,'OLS'] = ols_fit.mse_resid
 			#print "OLS"
@@ -125,20 +129,26 @@ def gen_grid(X,y,background):
 			cv = StratifiedShuffleSplit(n_splits=5, test_size=0.2, random_state=42)
 
 			#LASSO
+			print "\tLASSO"
 			lasso_grid = GridSearchCV(Lasso(), param_grid=param_grid, cv=cv, scoring='mean_squared_error')
 			lasso_grid.fit(Xf,y)
 			results.ix[threshold,'LASSO'] = lasso_grid.best_score_
-
+			alphas.ix[threshold,'LASSO'] = lasso_grid.best_params_['alpha']
+			
 			#Ridge
+			print "\tRidge"
 			ridge_grid = GridSearchCV(Ridge(), param_grid=param_grid, cv=cv, scoring='mean_squared_error')
 			ridge_grid.fit(Xf,y)
 			results.ix[threshold,'Ridge'] = ridge_grid.best_score_
-
+			results.ix[threshold,'LASSO'] = ridge_grid.best_params_['alpha']
+			
 			#Elastic
+			print "\tElasticNet"
 			elastic_grid = GridSearchCV(ElasticNet(), param_grid=param_grid, cv=cv, scoring='mean_squared_error')
 			elastic_grid.fit(Xf,y)
 			results.ix[threshold,'ElasticNet'] = elastic_grid.best_score_
-	return results
+			alphas.ix[threshold,'ElasticNet'] = elastic_grid.best_params_['alpha']
+	return results, alphas
 
 
 def gen_submission(pred):
@@ -148,6 +158,15 @@ def gen_submission(pred):
 		myzip.write('prediction.csv')
 		myzip.write('narrative.txt')
 		myzip.write('ffc.py')
+
+def main2():
+
+	background = pd.read_csv("output.csv", low_memory=False)
+	prediction = pd.read_csv("prediction_old.csv", low_memory=False)
+	X,y = filter_data(background)
+	results,alphas = gen_grid(X,y,background)
+	results.to_csv("scores.csv", index=False)
+	alphas.to_csv("alphas.csv", index=False)
 
 def main():
 	#Impute data.
@@ -223,5 +242,5 @@ def fillMissing(inputcsv, outputcsv):
     dfn.to_csv(outputcsv, index=False)
     
 if __name__ == "__main__":
-	main()
+	main2()
 
