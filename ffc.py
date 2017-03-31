@@ -7,8 +7,8 @@ from scipy import linalg
 import statsmodels.regression.linear_model as lm
 from sklearn import datasets
 from sklearn.mixture import GaussianMixture
-from sklearn.model_selection import StratifiedKFold, StratifiedShuffleSplit
-from sklearn.linear_model import LassoCV, LassoLarsCV, LassoLarsIC, RandomizedLasso, lasso_stability_path, ElasticNet, Lasso
+from sklearn.model_selection import StratifiedKFold, KFold, GridSearchCV
+from sklearn.linear_model import LassoCV, LassoLarsCV, LassoLarsIC, RandomizedLasso, lasso_stability_path, ElasticNet, Lasso, Ridge
 from sklearn.feature_selection import f_regression
 from sklearn.preprocessing import StandardScaler
 from sklearn.metrics import auc, precision_recall_curve, mean_squared_error
@@ -126,7 +126,7 @@ def gen_grid(X,y,background):
 			#print "OLS"
 
 			param_grid = dict(alpha=np.logspace(-3,1,5))
-			cv = StratifiedShuffleSplit(n_splits=5, test_size=0.2, random_state=42)
+			cv = StratifiedKFold(n_splits=5, random_state=42)
 
 			#LASSO
 			print "\tLASSO"
