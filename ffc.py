@@ -23,6 +23,8 @@ supports = {}
 thresholds = np.logspace(-5,-1,5)
 results = pd.DataFrame(index=thresholds, columns=['OLS', 'LASSO', 'Ridge', 'ElasticNet'])
 alphas = pd.DataFrame(index=thresholds, columns=['LASSO', 'Ridge', 'ElasticNet'])
+plt.interactive(True)
+
 '''
 	Filtering
 		remove object columns
@@ -99,7 +101,7 @@ def feature_selection(X, y):
 		warnings.simplefilter('ignore', ConvergenceWarning)
 		#print "\tLasso Stability Path"
 		#alpha_grid, scores_path = lasso_stability_path(X, y, random_state=43, eps=0.05)
-		#print "\tRandomizedLasso"
+		#print "\tRandomizedLas	so"
 		lasso = RandomizedLasso(alpha='aic', random_state=39, n_resampling=500)
 		lasso.fit(X,y)		
 
@@ -166,8 +168,8 @@ def gen_grid(X,y,background):
 			elastic_grid.fit(Xf,y)
 			results.ix[threshold,'ElasticNet'] = elastic_grid.best_score_
 			alphas.ix[threshold,'ElasticNet'] = elastic_grid.best_params_['alpha']
-
-	return results.abs(), alphas
+	results = results.abs()
+	return results, alphas
 
 def make_threshold_plot():
 	plt.figure()
