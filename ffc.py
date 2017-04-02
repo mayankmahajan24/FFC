@@ -18,11 +18,16 @@ from sklearn.exceptions import ConvergenceWarning
 import warnings
 from zipfile import ZipFile
 from datetime import datetime
+import time
 
-supports = None
-results = None
-alphas = None
-thresholds = np.logspace(-5,-1,5)
+supports = {}
+thresholds = np.logspace(-3,-1,3)
+clf_names = ['OLS','LASSO', 'Ridge','ElasticNet']
+results = pd.DataFrame(index=thresholds, columns=clf_names)
+alphas = pd.DataFrame(index=thresholds, columns=clf_names[1:])
+plt.interactive(True)
+best_thresholds = {}
+
 '''
 	Filtering
 		remove object columns
@@ -90,40 +95,44 @@ def get_data_for_characteristic(X_train, Y_train, characteristic):
 	return X_train_char, char
 
 def feature_selection(X, y):
-	#alphas = np.logspace(-3,-1,21)
-	#print "Feature Selection"
+	print "Feature Selection"
 	X = X.as_matrix()
 	y = y.as_matrix()
 	with warnings.catch_warnings():
 		warnings.simplefilter('ignore', UserWarning)
 		warnings.simplefilter('ignore', ConvergenceWarning)
-		#print "\tLasso Stability Path"
-		#alpha_grid, scores_path = lasso_stability_path(X, y, random_state=43, eps=0.05)
-		#print "\tRandomizedLasso"
 		lasso = RandomizedLasso(alpha='aic', random_state=39, n_resampling=500)
 		lasso.fit(X,y)		
-
-	# plt.figure()
-	# # We plot the path as a function of alpha/alpha_max to the power 1/3: the
-	# # power 1/3 scales the path less brutally than the log, and enables to
-	# # see the progression along the path
-	# #hg = plt.plot(alpha_grid[1:] ** .333, scores_path[coef != 0].T[1:], 'r')
-	# hb = plt.plot(alpha_grid[1:] ** .333, scores_path.T[1:], 'k')
-	# ymin, ymax = plt.ylim()
-	# plt.xlabel(r'$(\alpha / \alpha_{max})^{1/3}$')
-	# plt.ylabel('Stability score: proportion of times selected')
-	# plt.title('Stability Scores Path')# - Mutual incoherence: %.1f' % mi)
-	# plt.axis('tight')
-	# #plt.legend((hg[0], hb[0]), ('relevant features', 'irrelevant features'),
-	# #           loc='best')
-	# plt.show()
+		#plot_stability_path()
 
 	return lasso
 
+def plot_stability_path():
+	plt.figure()
+	# We plot the path as a function of alpha/alpha_max to the power 1/3: the
+	# power 1/3 scales the path less brutally than the log, and enables to
+	# see the progression along the path
+	print "\tLasso Stability Path"
+	alpha_grid, scores_path = lasso_stability_path(X, y, random_state=43, eps=0.05)
+
+	hg = plt.plot(alpha_grid[1:] ** .333, scores_path[coef != 0].T[1:], 'r')
+	hb = plt.plot(alpha_grid[1:] ** .333, scores_path.T[1:], 'k')
+	ymin, ymax = plt.ylim()
+	plt.xlabel(r'$(\alpha / \alpha_{max})^{1/3}$')
+	plt.ylabel('Stability score: proportion of times selected')
+	plt.title('Stability Scores Path')# - Mutual incoherence: %.1f' % mi)
+	plt.axis('tight')
+	plt.legend((hg[0], hb[0]), ('relevant features', 'irrelevant features'),
+	           loc='best')
+	plt.show()
+
 def gen_grid(X,y,background):
-	results = pd.DataFrame(index=thresholds, columns=['OLS', 'LASSO', 'Ridge', 'ElasticNet'])
-	alphas = pd.DataFrame(index=thresholds, columns=['LASSO', 'Ridge', 'ElasticNet'])
+	global supports, results, alphas, best_thresholds
 	supports = {}
+	results = pd.DataFrame(index=thresholds, columns=clf_names)
+	alphas = pd.DataFrame(index=thresholds, columns=clf_names[1:])
+	best_thresholds = {}
+
 	randomized_lasso = feature_selection(X,y)
 	stability_scores = randomized_lasso.scores_
 
@@ -144,7 +153,7 @@ def gen_grid(X,y,background):
 			results.ix[threshold,'OLS'] = ols_fit.mse_resid
 			#print "OLS"
 
-			param_grid = dict(alpha=np.logspace(-6,-2,5))
+			param_grid = dict(alpha=np.logspace(-6,0,7))
 			cv = StratifiedKFold(n_splits=5, random_state=42)
 
 			#LASSO
@@ -167,13 +176,17 @@ def gen_grid(X,y,background):
 			elastic_grid.fit(Xf,y)
 			results.ix[threshold,'ElasticNet'] = elastic_grid.best_score_
 			alphas.ix[threshold,'ElasticNet'] = elastic_grid.best_params_['alpha']
+	results = results.abs()
 
-	return results.abs, alphas
+	for name in clf_names:
+		best_thresholds[name] = results[name].idxmin()
+	return results, alphas
 
 def make_threshold_plot():
 	plt.figure()
 
 	plt.xscale('log')
+
 	ols_plot = plt.plot(thresholds, results['OLS'], 'r')
 	lasso_plot = plt.plot(thresholds, results['LASSO'], 'b')
 	ridge_plot = plt.plot(thresholds, results['Ridge'], 'o')
@@ -187,27 +200,61 @@ def make_threshold_plot():
 	           loc='best')
 	plt.show()
 
+def generate_all_predictions(X,y,background,characteristic): #Generates predictions from the 4 classifiers for a characteristic
+	clfs = [
+	lm.OLS(y, X.iloc[:,supports[best_thresholds['OLS']]]).fit(),
+	Lasso(alpha=alphas.ix[best_thresholds['LASSO'],'LASSO']).fit(X.iloc[:,supports[best_thresholds['LASSO']]],y),
+	Ridge(alpha=alphas.ix[best_thresholds['Ridge'],'Ridge']).fit(X.iloc[:,supports[best_thresholds['Ridge']]],y),
+	ElasticNet(alpha=alphas.ix[best_thresholds['ElasticNet'],'ElasticNet']).fit(X.iloc[:,supports[best_thresholds['ElasticNet']]],y)
+	]
+	predictions = {}
+	for (clf,name) in zip(clfs,clf_names):
+		predictions[name] = clf.predict(background.drop(['challengeID','idnum'],axis=1).iloc[:,supports[best_thresholds[name]]])
+	return predictions
 
-def gen_submission(pred):
 
-	pred.to_csv("prediction.csv", index=False)
-	with ZipFile( str('Submission' + datetime.now().strftime('%Y-%m-%d %H:%M:%S') + '.zip'), 'w') as myzip:
+def gen_submission(pred, name=""):
+	pred.to_csv("prediction" + name + ".csv", index=False)
+	with ZipFile( str('Submission' + name + datetime.now().strftime('%Y-%m-%d %H:%M:%S') + '.zip'), 'w') as myzip:
 		myzip.write('prediction.csv')
 		myzip.write('narrative.txt')
 		myzip.write('ffc.py')
 
 def main2():
-
 	background = pd.read_csv("output.csv", low_memory=False)
 	background.sort_values(by='challengeID', inplace=True)
+	background.index = background['challengeID'] - 1
 	prediction = pd.read_csv("prediction_old.csv", low_memory=False)
 	X_all,y_all = filter_data(background)
-	X,y = get_data_for_characteristic(X_all, y_all, 'grit')
-	results,alphas = gen_grid(X,y,background)
-	results.to_csv("scores.csv", index=False)
-	alphas.to_csv("alphas.csv", index=False)
 
-	make_threshold_plot()
+	ols_prediction = prediction
+	lasso_prediction = prediction
+	ridge_prediction = prediction
+	elastic_prediction = prediction
+
+	for characteristic in ['grit', 'gpa', 'materialHardship']:
+		print characteristic
+		X,y = get_data_for_characteristic(X_all, y_all, characteristic)
+		results,alphas = gen_grid(X,y,background)
+		results.to_csv("scores_" + characteristic + ".csv", index=False)
+		alphas.to_csv("alphas_" + characteristic + ".csv", index=False)
+		#make_threshold_plot()
+		print "Generating for " + characteristic
+		predictions = generate_all_predictions(X,y,background,characteristic)
+
+		ols_prediction[characteristic] = predictions['OLS']
+		lasso_prediction[characteristic] = predictions['LASSO']
+		ridge_prediction[characteristic] = predictions['Ridge']
+		elastic_prediction[characteristic] = predictions['ElasticNet']
+
+	gen_submission(ols_prediction,"_ols")
+	time.sleep(2)
+	gen_submission(lasso_prediction,"_lasso")
+	time.sleep(2)
+	gen_submission(ridge_prediction,"_ridge")
+	time.sleep(2)
+	gen_submission(elastic_prediction,"_elastic")
+	time.sleep(2)
 
 
 def main():
@@ -216,6 +263,7 @@ def main():
 
 	background = pd.read_csv("output.csv", low_memory=False)
 	background.sort_values(by='challengeID', inplace=True)
+	background.index = background['challengeID'] - 1
 	prediction = pd.read_csv("prediction_old.csv", low_memory=False)
 
 	X_all,y_all = filter_data(background)
