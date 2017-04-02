@@ -214,9 +214,10 @@ def generate_all_predictions(X,y,background,characteristic): #Generates predicti
 
 
 def gen_submission(pred, name=""):
-	pred.to_csv("prediction" + name + ".csv", index=False)
+	pred_filename = "prediction" + name + ".csv" 
+	pred.to_csv(pred_filename, index=False)
 	with ZipFile( str('Submission' + name + datetime.now().strftime('%Y-%m-%d %H:%M:%S') + '.zip'), 'w') as myzip:
-		myzip.write('prediction.csv')
+		myzip.write(pred_filename, arcname='prediction.csv')
 		myzip.write('narrative.txt')
 		myzip.write('ffc.py')
 

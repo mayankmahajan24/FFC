@@ -1,4 +1,8 @@
+.DS_store
 background.csv
 output.csv
-sub*.zip
+Sub*.zip
 .ipynb_checkpoints/*
+prediction_*.csv
+scores_*.csv
+alphas_*.csv
