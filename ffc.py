@@ -227,10 +227,10 @@ def main2():
 	prediction = pd.read_csv("prediction_old.csv", low_memory=False)
 	X_all,y_all = filter_data(background)
 
-	ols_prediction = prediction
-	lasso_prediction = prediction
-	ridge_prediction = prediction
-	elastic_prediction = prediction
+	ols_prediction = prediction.copy(deep=True)
+	lasso_prediction = prediction.copy(deep=True)
+	ridge_prediction = prediction.copy(deep=True)
+	elastic_prediction = prediction.copy(deep=True)
 
 	for characteristic in ['grit', 'gpa', 'materialHardship']:
 		print characteristic
