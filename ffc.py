@@ -91,11 +91,17 @@ def filter_data(background):
     nRow = len(background) 
     nCol = len(background.iloc[0,:])
 
-    X_all = background.drop(['challengeID', 'idnum'], axis=1)
-    X_train = X_all.iloc[:2121,:]
-
     Y_train = pd.read_csv("train.csv", low_memory=False)
-    return X_train, Y_train
+    training_ids = Y_train['challengeID'].tolist()
+
+    X_train = background[background['challengeID'].isin(training_ids)]
+    
+    X_train_sorted = X_train.sort_values(by='challengeID')
+    Y_train_sorted = Y_train.sort_values(by='challengeID')
+    assert(Y_train_sorted['challengeID'].tolist() == X_train_sorted['challengeID'].tolist())
+    
+    X_train_sorted = X_train_sorted.drop(['challengeID', 'idnum'], axis=1)
+    return X_train_sorted, Y_train_sorted
 
 def get_data_for_characteristic(X_train, Y_train, characteristic):
     all_char = Y_train[characteristic] #This is a Series
