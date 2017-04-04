@@ -51,14 +51,12 @@ best_thresholds = {}
 
 '''
 
-def fillMissing(inputcsv, outputcsv):    
+def fillMissing(df, outputcsv):    
     # read input csv - takes time
-    df = pd.read_csv(inputcsv, low_memory=False)
+    #df = pd.read_csv(inputcsv, low_memory=False)
     # Fix date bug
     df.cf4fint = ((pd.to_datetime(df.cf4fint) - pd.to_datetime('1960-01-01')) / np.timedelta64(1, 'D')).astype(int)
     df.sort_values(by='challengeID', inplace=True)
-
-    drop_low_var_quality_features(df, 200, 0.2)
 
     # replace NA's with median
     med2 = df.median()
@@ -91,19 +89,30 @@ def filter_data(background):
     nRow = len(background) 
     nCol = len(background.iloc[0,:])
 
+    #Drop low quality features
+    rows_count, cols_count = df.shape
+    df.dropna(axis=1, thresh=rows_count-200, inplace=True)
+    df.drop(df.std()[df.std() < 0.2].index.values, axis=1, inplace=True)
+
     Y_train = pd.read_csv("train.csv", low_memory=False)
+    #Get training challenge IDs
     training_ids = Y_train['challengeID'].tolist()
 
+    #Keep only labeled X samples 
     X_train = background[background['challengeID'].isin(training_ids)]
-
     
+    #Sort both by challenge ID
     X_train_sorted = X_train.sort_values(by='challengeID')
     Y_train_sorted = Y_train.sort_values(by='challengeID')
     assert(Y_train_sorted['challengeID'].tolist() == X_train_sorted['challengeID'].tolist())
     
+    #Drop nonnumeric columns
     X_train_sorted = X_train_sorted.drop(['challengeID', 'idnum'], axis=1)
     non_numeric_cols = X_train_sorted.select_dtypes(exclude=[np.number]).columns.values.tolist()
     X_train_sorted.drop(non_numeric_cols, axis=1, inplace=True)
+
+    #Make the indices the same, should be same as challenge ID - 1.
+    Y_train_sorted.index = X_train_sorted.index
     return X_train_sorted, Y_train_sorted
 
 def get_data_for_characteristic(X_train, Y_train, characteristic):
@@ -244,11 +253,19 @@ def gen_submission(pred, name=""):
         myzip.write('ffc.py')
 
 def main2():
-    background = pd.read_csv("output.csv", low_memory=False)
+    background = pd.read_csv("background.csv", low_memory=False)
     background.sort_values(by='challengeID', inplace=True)
     background.index = background['challengeID'] - 1
     prediction = pd.read_csv("prediction_old.csv", low_memory=False)
+
+    #Removal of bad features
     X_all,y_all = filter_data(background)
+
+    #Imputation
+    fillMissing(background, 'output.csv')
+    background = pd.read_csv("output.csv", low_memory=False)
+
+    #Remove other rows and columns that don't make sense for this (unlabelled, nonnumeric)
 
     ols_prediction = prediction.copy(deep=True)
     lasso_prediction = prediction.copy(deep=True)
