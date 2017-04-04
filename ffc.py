@@ -51,12 +51,9 @@ best_thresholds = {}
 
 '''
 
-def fillMissing(df, outputcsv):    
+def fillMissing(df):    
     # read input csv - takes time
     #df = pd.read_csv(inputcsv, low_memory=False)
-    # Fix date bug
-    df.cf4fint = ((pd.to_datetime(df.cf4fint) - pd.to_datetime('1960-01-01')) / np.timedelta64(1, 'D')).astype(int)
-    df.sort_values(by='challengeID', inplace=True)
 
     # replace NA's with median
     med2 = df.median()
@@ -73,7 +70,8 @@ def fillMissing(df, outputcsv):
     num = dfn._get_numeric_data()
     num[num < 0] = 1
     # write filled outputcsv
-    dfn.to_csv(outputcsv, index=False)
+    return dfn
+    #dfn.to_csv(outputcsv, index=False)
 
 def drop_low_var_quality_features(df, missing_values_threshold, std_threshold):
     """
@@ -85,9 +83,9 @@ def drop_low_var_quality_features(df, missing_values_threshold, std_threshold):
     df.dropna(axis=1, thresh=rows_count-missing_values_threshold, inplace=True)
     df.drop(df.std()[df.std() < std_threshold].index.values, axis=1, inplace=True)
 
-def filter_data(background):
-    nRow = len(background) 
-    nCol = len(background.iloc[0,:])
+def filter_data(df):
+    nRow = len(df) 
+    nCol = len(df.iloc[0,:])
 
     #Drop low quality features
     rows_count, cols_count = df.shape
@@ -95,24 +93,34 @@ def filter_data(background):
     df.drop(df.std()[df.std() < 0.2].index.values, axis=1, inplace=True)
         
     #Drop nonnumeric columns
-    X_train_sorted = X_train_sorted.drop(['challengeID', 'idnum'], axis=1)
-    non_numeric_cols = X_train_sorted.select_dtypes(exclude=[np.number]).columns.values.tolist()
-    X_train_sorted.drop(non_numeric_cols, axis=1, inplace=True)
+    df.index = df['challengeID']
+    df = df.drop(['challengeID', 'idnum'], axis=1)
+    non_numeric_cols = df.select_dtypes(exclude=[np.number]).columns.values.tolist()
+    df.drop(non_numeric_cols, axis=1, inplace=True)
 
-    #Sort both by challenge ID
-    X_train_sorted = X_train.sort_values(by='challengeID')
-    return X_train_sorted
+    #Sort by challenge ID / index
+    df.sort_index(inplace = True)
+    return df
+
+def imputation(X_all, characteristic): #Takes post early removal X
+
+    #Imputation
+    X_imputed = fillMissing(X_all)
+
+    #Get training challenge IDs
+    Y_train = pd.read_csv("train.csv", low_memory=False)
+    Y_train.index = Y_train['challengeID']
+    Y_train.sort_index(inplace=True)
+
+    return X_imputed, Y_train #Note, different sizes still
 
 def get_data_for_characteristic(X_train, Y_train, characteristic, get_only_complete_cases=False):
     y_char = Y_train[np.isfinite(Y_train[characteristic])]
     
-    training_ids = y_char['challengeID'].tolist()
-    X_char = X_train[X_train['challengeID'].isin(training_ids)]
-    assert(training_ids == X_char['challengeID'].tolist())
+    training_index = y_char.index
+    X_char = X_train.loc[training_index,:]
+    #assert(training_ids == X_char['challengeID'].tolist())
         
-    if get_only_complete_cases is True:
-        X_char = X_char.dropna(axis=0, inplace=False)
-
     return X_char, y_char[characteristic]
 
 def feature_selection(X, y):
@@ -147,7 +155,7 @@ def plot_stability_path():
                loc='best')
     plt.show()
 
-def gen_grid(X,y,background):
+def gen_grid(X,y):
     global supports, results, alphas, best_thresholds
     supports = {}
     results = pd.DataFrame(index=thresholds, columns=clf_names)
@@ -162,7 +170,6 @@ def gen_grid(X,y,background):
         print threshold, '\t', str(support)
         supports[threshold] = support
         Xf = X.iloc[:,support]
-        testf = background.drop(['challengeID','idnum'],axis=1).iloc[:,support]
 
         with warnings.catch_warnings():
             warnings.simplefilter('ignore', UserWarning)
@@ -212,16 +219,15 @@ def make_threshold_plot():
     lasso_plot = plt.plot(thresholds, results['LASSO'], 'b')
     ridge_plot = plt.plot(thresholds, results['Ridge'], 'o')
     elastic_plot = plt.plot(thresholds, results['ElasticNet'], 'g')
-
     plt.xlabel('Stability score: proportion of times selected')
     plt.ylabel('Mean squared error on training data')
-    plt.title('Mean squared error as a function of RandomizedLasso threshold')# - Mutual incoherence: %.1f' % mi)
     plt.axis('tight')
     plt.legend((ols_plot[0], lasso_plot[0], ridge_plot[0], elastic_plot[0]), ('OLS', 'LASSO', 'Ridge', 'ElasticNet'),
                loc='best')
     plt.show()
 
 def generate_all_predictions(X,y,background,characteristic): #Generates predictions from the 4 classifiers for a characteristic
+    print "Generating for " + characteristic
     clfs = [
     lm.OLS(y, X.iloc[:,supports[best_thresholds['OLS']]]).fit(),
     Lasso(alpha=alphas.ix[best_thresholds['LASSO'],'LASSO']).fit(X.iloc[:,supports[best_thresholds['LASSO']]],y),
@@ -230,7 +236,7 @@ def generate_all_predictions(X,y,background,characteristic): #Generates predicti
     ]
     predictions = {}
     for (clf,name) in zip(clfs,clf_names):
-        predictions[name] = clf.predict(background.drop(['challengeID','idnum'],axis=1).iloc[:,supports[best_thresholds[name]]])
+        predictions[name] = clf.predict(background.iloc[:,supports[best_thresholds[name]]])
     return predictions
 
 
@@ -242,32 +248,32 @@ def gen_submission(pred, name=""):
         myzip.write('narrative.txt')
         myzip.write('ffc.py')
 
-def imputation(X_all, characteristic): #Takes post early removal X
-
-    #Imputation
-    fillMissing(X_all, 'output.csv')
-    X_imputed = pd.read_csv("output.csv", low_memory=False)
-
-    #Get training challenge IDs
-    Y_train = pd.read_csv("train.csv", low_memory=False)
-
-    #Make the indices the same, should be same as challenge ID - 1.
-    X_train_sorted.index = Y_train_sorted.index
-
-    return X_train_sorted, Y_train_sorted
-
 
 def main2():
-    background = pd.read_csv("background.csv", low_memory=False)
-    background.sort_values(by='challengeID', inplace=True)
-    background.index = background['challengeID'] - 1
-    prediction = pd.read_csv("prediction_old.csv", low_memory=False)
+    # print "Read"
+    # background = pd.read_csv("background.csv", low_memory=False)
+    # # Fix date bug
+    # background.cf4fint = ((pd.to_datetime(background.cf4fint) - pd.to_datetime('1960-01-01')) / np.timedelta64(1, 'D')).astype(int)
 
-    #Removal of bad features
-    X_all = filter_data(background)
+    # background.sort_values(by='challengeID', inplace=True)
+    # background.index = background['challengeID']
+    # prediction = pd.read_csv("prediction_old.csv", low_memory=False)
 
-    #impute and select data based on characteristic (KEEP FOR MAYANK / DELETE FOR AKASH)
-    X_all, y_all = imputation(X_all, None) 
+    # #Removal of bad features
+    # print "Initial Filter"
+    # X_all = filter_data(background)
+
+    # #impute and select data based on characteristic (KEEP FOR MAYANK / DELETE FOR AKASH)
+    # print "Imputation (Mayank)"
+    # X_imputed, y_imputed = imputation(X_all, None)
+
+    # # one time code, write median imputed code to csv
+    # X_imputed.to_csv("X_median_imputed.csv", index=True)
+
+    X_imputed = pd.read_csv("X_median_imputed.csv", low_memory=False)
+    X_imputed.cf4fint = ((pd.to_datetime(X_imputed.cf4fint) - pd.to_datetime('1960-01-01')) / np.timedelta64(1, 'D')).astype(int)
+    y_imputed = pd.read_csv("train.csv", low_memory=False)
+    y_imputed.index = X_imputed.index
 
     ols_prediction = prediction.copy(deep=True)
     lasso_prediction = prediction.copy(deep=True)
@@ -278,13 +284,12 @@ def main2():
         print characteristic
         #X_all, y_all = imputation(X_all, characteristic)  (KEEP FOR AKASH / DELETE FOR MAYANK)
 
-        X,y = get_data_for_characteristic(X_all, y_all, characteristic)
-        results,alphas = gen_grid(X,y,background)
+        X,y = get_data_for_characteristic(X_imputed, y_imputed, characteristic)
+        results,alphas = gen_grid(X,y)
         results.to_csv("scores_" + characteristic + ".csv", index=False)
         alphas.to_csv("alphas_" + characteristic + ".csv", index=False)
         #make_threshold_plot()
-        print "Generating for " + characteristic
-        predictions = generate_all_predictions(X,y,background,characteristic)
+        predictions = generate_all_predictions(X,y,X_all,characteristic)
 
         ols_prediction[characteristic] = predictions['OLS']
         lasso_prediction[characteristic] = predictions['LASSO']
@@ -300,14 +305,14 @@ def main2():
     gen_submission(elastic_prediction,"_elastic")
     time.sleep(2)
 
-
+'''
 def main():
     #Impute data.
     #fillMissing('background.csv', 'output.csv') #Comment this out after one run
 
     background = pd.read_csv("output.csv", low_memory=False)
     background.sort_values(by='challengeID', inplace=True)
-    background.index = background['challengeID'] - 1
+    background.index = background['challengeID']
     prediction = pd.read_csv("prediction_old.csv", low_memory=False)
 
     X_all,y_all = filter_data(background)
@@ -325,7 +330,7 @@ def main():
         print olsf.fit().summary()
 
     #Prediction
-    testf = randomized_lasso.transform(background.drop(['challengeID','idnum'],axis=1))
+    testf = randomized_lasso.transform(basedckground.drop(['challengeID','idnum'],axis=1))
     grit_predict = olsf.fit().predict(testf)
     grit_predict_round = np.round(grit_predict*4)/4 #Round to nearest 0.25
     grit_predict_round = np.where(grit_predict_round < 4.0, grit_predict_round, 4.0) #Bounds
@@ -337,7 +342,7 @@ def main():
     print "Training MSE (w/rounding): " + str(mean_squared_error(y.as_matrix(), prediction.ix[y.index, 'grit'].as_matrix()))
 
     gen_submission(prediction)
-    
+'''
 if __name__ == "__main__":
     main2()
 
