@@ -257,8 +257,7 @@ def main2():
 
     # background.sort_values(by='challengeID', inplace=True)
     # background.index = background['challengeID']
-    # prediction = pd.read_csv("prediction_old.csv", low_memory=False)
-
+    
     # #Removal of bad features
     # print "Initial Filter"
     # X_all = filter_data(background)
@@ -270,10 +269,11 @@ def main2():
     # # one time code, write median imputed code to csv
     # X_imputed.to_csv("X_median_imputed.csv", index=True)
 
-    X_imputed = pd.read_csv("X_median_imputed.csv", low_memory=False)
+    X_imputed = pd.read_csv("X_median_imputed.csv", low_memory=False, index_col=0)
     X_imputed.cf4fint = ((pd.to_datetime(X_imputed.cf4fint) - pd.to_datetime('1960-01-01')) / np.timedelta64(1, 'D')).astype(int)
-    y_imputed = pd.read_csv("train.csv", low_memory=False)
-    y_imputed.index = X_imputed.index
+    y_imputed = pd.read_csv("train.csv", low_memory=False, index_col=0)
+
+    prediction = pd.read_csv("prediction_old.csv", low_memory=False)
 
     ols_prediction = prediction.copy(deep=True)
     lasso_prediction = prediction.copy(deep=True)
@@ -289,7 +289,7 @@ def main2():
         results.to_csv("scores_" + characteristic + ".csv", index=False)
         alphas.to_csv("alphas_" + characteristic + ".csv", index=False)
         #make_threshold_plot()
-        predictions = generate_all_predictions(X,y,X_all,characteristic)
+        predictions = generate_all_predictions(X,y,X_imputed,characteristic)
 
         ols_prediction[characteristic] = predictions['OLS']
         lasso_prediction[characteristic] = predictions['LASSO']
