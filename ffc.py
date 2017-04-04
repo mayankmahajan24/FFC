@@ -115,15 +115,22 @@ def filter_data(background):
     Y_train_sorted.index = X_train_sorted.index
     return X_train_sorted, Y_train_sorted
 
-def get_data_for_characteristic(X_train, Y_train, characteristic):
-    all_char = Y_train[characteristic] #This is a Series
+def get_data_for_characteristic(X_train, Y_train, characteristic, get_only_complete_cases=False):
+    y_char = Y_train[np.isfinite(Y_train[characteristic])]
+    
+    training_ids = y_char['challengeID'].tolist()
+    X_char = X_train[X_train['challengeID'].isin(training_ids)]
+    X_char = X_char.sort_values(by='challengeID')
+    y_char = y_char.sort_values(by='challengeID')
+    assert(y_char['challengeID'].tolist() == X_char['challengeID'].tolist())
+    
+    non_numeric_cols = X_char.select_dtypes(exclude=[np.number]).columns.values.tolist()
+    X_char.drop(non_numeric_cols, axis=1, inplace=True)
+    
+    if get_only_complete_cases is True:
+        X_char = X_char.dropna(axis=0, inplace=False)
 
-    #Remove rows where grit is NA
-    char_defined = np.where(all_char.notnull())
-    char = all_char.iloc[char_defined]
-    X_train_char = X_train.iloc[char_defined]
-
-    return X_train_char, char
+    return X_char, y_char[characteristic]
 
 def feature_selection(X, y):
     print "Feature Selection"
