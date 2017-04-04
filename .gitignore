@@ -6,3 +6,4 @@ Sub*.zip
 prediction_*.csv
 scores_*.csv
 alphas_*.csv
+ignore*
