@@ -95,12 +95,15 @@ def filter_data(background):
     training_ids = Y_train['challengeID'].tolist()
 
     X_train = background[background['challengeID'].isin(training_ids)]
+
     
     X_train_sorted = X_train.sort_values(by='challengeID')
     Y_train_sorted = Y_train.sort_values(by='challengeID')
     assert(Y_train_sorted['challengeID'].tolist() == X_train_sorted['challengeID'].tolist())
     
     X_train_sorted = X_train_sorted.drop(['challengeID', 'idnum'], axis=1)
+    non_numeric_cols = X_train_sorted.select_dtypes(exclude=[np.number]).columns.values.tolist()
+    X_train_sorted.drop(non_numeric_cols, axis=1, inplace=True)
     return X_train_sorted, Y_train_sorted
 
 def get_data_for_characteristic(X_train, Y_train, characteristic):
