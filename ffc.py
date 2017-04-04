@@ -93,40 +93,23 @@ def filter_data(background):
     rows_count, cols_count = df.shape
     df.dropna(axis=1, thresh=rows_count-200, inplace=True)
     df.drop(df.std()[df.std() < 0.2].index.values, axis=1, inplace=True)
-
-    Y_train = pd.read_csv("train.csv", low_memory=False)
-    #Get training challenge IDs
-    training_ids = Y_train['challengeID'].tolist()
-
-    #Keep only labeled X samples 
-    X_train = background[background['challengeID'].isin(training_ids)]
-    
-    #Sort both by challenge ID
-    X_train_sorted = X_train.sort_values(by='challengeID')
-    Y_train_sorted = Y_train.sort_values(by='challengeID')
-    assert(Y_train_sorted['challengeID'].tolist() == X_train_sorted['challengeID'].tolist())
-    
+        
     #Drop nonnumeric columns
     X_train_sorted = X_train_sorted.drop(['challengeID', 'idnum'], axis=1)
     non_numeric_cols = X_train_sorted.select_dtypes(exclude=[np.number]).columns.values.tolist()
     X_train_sorted.drop(non_numeric_cols, axis=1, inplace=True)
 
-    #Make the indices the same, should be same as challenge ID - 1.
-    Y_train_sorted.index = X_train_sorted.index
-    return X_train_sorted, Y_train_sorted
+    #Sort both by challenge ID
+    X_train_sorted = X_train.sort_values(by='challengeID')
+    return X_train_sorted
 
 def get_data_for_characteristic(X_train, Y_train, characteristic, get_only_complete_cases=False):
     y_char = Y_train[np.isfinite(Y_train[characteristic])]
     
     training_ids = y_char['challengeID'].tolist()
     X_char = X_train[X_train['challengeID'].isin(training_ids)]
-    X_char = X_char.sort_values(by='challengeID')
-    y_char = y_char.sort_values(by='challengeID')
-    assert(y_char['challengeID'].tolist() == X_char['challengeID'].tolist())
-    
-    non_numeric_cols = X_char.select_dtypes(exclude=[np.number]).columns.values.tolist()
-    X_char.drop(non_numeric_cols, axis=1, inplace=True)
-    
+    assert(training_ids == X_char['challengeID'].tolist())
+        
     if get_only_complete_cases is True:
         X_char = X_char.dropna(axis=0, inplace=False)
 
@@ -259,6 +242,21 @@ def gen_submission(pred, name=""):
         myzip.write('narrative.txt')
         myzip.write('ffc.py')
 
+def imputation(X_all, characteristic): #Takes post early removal X
+
+    #Imputation
+    fillMissing(X_all, 'output.csv')
+    X_imputed = pd.read_csv("output.csv", low_memory=False)
+
+    #Get training challenge IDs
+    Y_train = pd.read_csv("train.csv", low_memory=False)
+
+    #Make the indices the same, should be same as challenge ID - 1.
+    X_train_sorted.index = Y_train_sorted.index
+
+    return X_train_sorted, Y_train_sorted
+
+
 def main2():
     background = pd.read_csv("background.csv", low_memory=False)
     background.sort_values(by='challengeID', inplace=True)
@@ -266,13 +264,10 @@ def main2():
     prediction = pd.read_csv("prediction_old.csv", low_memory=False)
 
     #Removal of bad features
-    X_all,y_all = filter_data(background)
+    X_all = filter_data(background)
 
-    #Imputation
-    fillMissing(background, 'output.csv')
-    background = pd.read_csv("output.csv", low_memory=False)
-
-    #Remove other rows and columns that don't make sense for this (unlabelled, nonnumeric)
+    #impute and select data based on characteristic (KEEP FOR MAYANK / DELETE FOR AKASH)
+    X_all, y_all = imputation(X_all, None) 
 
     ols_prediction = prediction.copy(deep=True)
     lasso_prediction = prediction.copy(deep=True)
@@ -281,6 +276,8 @@ def main2():
 
     for characteristic in ['grit', 'gpa', 'materialHardship']:
         print characteristic
+        #X_all, y_all = imputation(X_all, characteristic)  (KEEP FOR AKASH / DELETE FOR MAYANK)
+
         X,y = get_data_for_characteristic(X_all, y_all, characteristic)
         results,alphas = gen_grid(X,y,background)
         results.to_csv("scores_" + characteristic + ".csv", index=False)
